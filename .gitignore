@@ -10,12 +10,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
-
 # Build output
 dist/
 build/
@@ -28,7 +22,6 @@ coverage/
 # Environment variables
 .env
 .env.*
-!.env.example
 
 # Cache
 .npm
@@ -46,8 +39,6 @@ Thumbs.db
 *.swp
 *.swo
 
-# TypeScript
-*.tsbuildinfo
 
 # Next.js / Nuxt / Vite
 .next/
@@ -56,9 +47,3 @@ Thumbs.db
 
 # Optional npm cache directory
 .npm/
-
-# Firebase
-.firebase/
-
-# Misc
-*.tgz
