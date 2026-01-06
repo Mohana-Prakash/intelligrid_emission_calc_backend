@@ -14,11 +14,6 @@ export const calculate = async ({
   const distance_with_trip = distance * tripMultiplier;
 
   const passengerMultiplier = factor.activity === "flight" ? passengers : 1;
-  console.log(
-    distance_with_trip,
-    factor.emission_factor_value,
-    passengerMultiplier
-  );
 
   const emission =
     distance_with_trip * factor.emission_factor_value * passengerMultiplier;
