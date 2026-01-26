@@ -1,5 +1,22 @@
 import mongoose from "mongoose";
 
+const ActivityAttributesSchema = new mongoose.Schema(
+  {
+    activity: { type: String, required: true, index: true },
+    category: { type: String, index: true },
+    size: { type: String, index: true },
+    segment: { type: String, index: true },
+    fuel: { type: String, index: true },
+    haul: { type: String, index: true },
+    cabin_class: { type: String, index: true },
+    type: { type: String, index: true },
+
+    // MUST match factor_unit
+    distance_unit: { type: String, required: true },
+  },
+  { _id: false },
+);
+
 const EmissionFactorSchema = new mongoose.Schema(
   {
     scope_id: {
@@ -9,50 +26,16 @@ const EmissionFactorSchema = new mongoose.Schema(
       index: true,
     },
 
-    activity: {
+    activity_attributes: {
+      type: ActivityAttributesSchema,
+      required: true,
+    },
+
+    // canonical unit for calculation
+    factor_unit: {
       type: String,
       required: true,
       index: true,
-    },
-
-    category: {
-      type: String,
-      index: true,
-    },
-
-    size: {
-      type: String,
-      index: true,
-    },
-
-    segment: {
-      type: String,
-      index: true,
-    },
-
-    fuel: {
-      type: String,
-      index: true,
-    },
-
-    haul: {
-      type: String,
-      index: true,
-    },
-
-    class: {
-      type: String,
-      index: true,
-    },
-
-    type: {
-      type: String,
-      index: true,
-    },
-
-    distance_unit: {
-      type: String,
-      required: true,
     },
 
     emission_factor_value: {
@@ -69,11 +52,13 @@ const EmissionFactorSchema = new mongoose.Schema(
     scope: {
       type: String,
       required: true,
+      index: true,
     },
 
     source: {
       type: String,
       required: true,
+      index: true,
     },
 
     year: {
@@ -89,11 +74,11 @@ const EmissionFactorSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 export default mongoose.model(
   "EmissionFactor",
   EmissionFactorSchema,
-  "defra_emission_factor"
+  "defra_emission_factor",
 );

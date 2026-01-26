@@ -1,7 +1,13 @@
 import EmissionFactor from "../models/EmissionFactor.js";
 
+// export const fetchByActivity = (activity) => {
+//   return EmissionFactor.find(activity ? { activity } : {});
+// };
+
 export const fetchByActivity = (activity) => {
-  return EmissionFactor.find(activity ? { activity } : {});
+  return EmissionFactor.find(
+    activity ? { "activity_attributes.activity": activity } : {},
+  );
 };
 
 export const insertMany = async (records) => {
