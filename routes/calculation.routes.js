@@ -4,8 +4,8 @@ import {
   fetchCalculationHistory,
 } from "../controllers/calculation.controller.js";
 
-// const router = express.Router();
-// router.post("/emission", calculateEmission);
-// router.get("/history", fetchCalculationHistory);
+const router = express.Router();
+router.post("/emission", calculateEmission);
+router.get("/history", fetchCalculationHistory);
 
 export default router;
