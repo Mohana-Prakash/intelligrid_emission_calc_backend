@@ -17,6 +17,7 @@ if (!code || code.trim().length === 0) {
   process.exit(0);
 }
 
+
 const prompt = `
 You are a senior backend reviewer.
 
@@ -120,8 +121,39 @@ const text =
 console.log("\n===== AI REVIEW =====\n");
 console.log(text);
 
+
+// 🧠 Helper: Extract section safely
+function formatSection(fullText, section, emoji) {
+  const regex = new RegExp(`${section}:([\\s\\S]*?)(?=\\n[A-Z]+:|$)`);
+  const match = fullText.match(regex);
+
+  if (!match || !match[1].trim()) {
+    return `${emoji} ✅ No issues found`;
+  }
+
+  return match[1]
+    .trim()
+    .split("\n")
+    .filter(line => line.trim().length > 0)
+    .map(line => `- ${line.replace(/^-\s*/, "")}`)
+    .join("\n");
+}
+
+// 🚀 Bonus: Summary detection
+const hasCritical =
+  /CRITICAL:\s*-\s+/m.test(text) &&
+  !/CRITICAL:\s*No issues found/i.test(text);
+
+const summary = hasCritical
+  ? "🚨 **Critical issues found – review required before merge**"
+  : "✅ **No critical issues – safe to proceed**";
+
+
+// 🎨 Final formatted comment
 const reviewComment = `
 ## 🤖 AI Code Review
+
+${summary}
 
 ---
 
@@ -152,6 +184,8 @@ ${formatSection(text, "SUGGESTIONS", "🟢")}
 ${formatSection(text, "NOTE", "🔵")}
 `;
 
+
+// 📬 Post to GitHub PR
 if (process.env.GITHUB_TOKEN && process.env.PR_NUMBER) {
   await fetch(`https://api.github.com/repos/${process.env.REPO}/issues/${process.env.PR_NUMBER}/comments`, {
     method: "POST",
