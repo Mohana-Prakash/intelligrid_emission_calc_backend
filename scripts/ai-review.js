@@ -1,7 +1,18 @@
 import "dotenv/config";
-import { execSync } from "child_process";
+import fs from "fs";
 
-const code = execSync("git diff", { encoding: "utf-8" });
+let code = "";
+
+try {
+  code = fs.readFileSync("diff.txt", "utf-8");
+} catch (err) {
+  console.log("❌ Failed to read diff.txt");
+}
+
+if (!code || code.trim().length === 0) {
+  console.log("No code changes provided for review.");
+  process.exit(0);
+}
 
 const prompt = `
 You are a senior backend reviewer.
