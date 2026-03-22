@@ -78,7 +78,6 @@ const res = await fetch("https://api.openai.com/v1/responses", {
 });
 
 const data = await res.json();
-console.log(data);
 
 const text =
   data?.output?.[0]?.content?.[0]?.text ||
