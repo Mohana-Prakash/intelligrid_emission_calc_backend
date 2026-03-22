@@ -1,5 +1,6 @@
 import "dotenv/config";
 import fs from "fs";
+import fetch from "node-fetch";
 import { execSync } from "child_process";
 
 let code = "";
@@ -80,13 +81,34 @@ const data = await res.json();
 
 
 // 🔍 Debug: print full response once
-console.log("FULL RESPONSE:\n", JSON.stringify(data, null, 2));
+// console.log("FULL RESPONSE:\n", JSON.stringify(data, null, 2));
 
 // ✅ Safe extraction
 const text =
   data?.output?.[0]?.content?.[0]?.text ||
-  data?.output_text ||
   "No AI response received";
 
 console.log("\n===== AI REVIEW =====\n");
 console.log(text);
+
+
+const reviewComment = `
+### 🤖 AI Code Review
+
+${text}
+`;
+
+if (process.env.GITHUB_TOKEN && process.env.PR_NUMBER) {
+  await fetch(`https://api.github.com/repos/${process.env.REPO}/issues/${process.env.PR_NUMBER}/comments`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.GITHUB_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      body: reviewComment
+    })
+  });
+
+  console.log("✅ Comment posted to PR");
+}
