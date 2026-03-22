@@ -121,9 +121,35 @@ console.log("\n===== AI REVIEW =====\n");
 console.log(text);
 
 const reviewComment = `
-### 🤖 AI Code Review
+## 🤖 AI Code Review
 
-${text}
+---
+
+### 🔴 CRITICAL
+> 🚨 Issues that will break production
+
+${formatSection(text, "CRITICAL", "🔴")}
+
+---
+
+### 🟠 WARNING
+> ⚠️ Potential risks or concerns
+
+${formatSection(text, "WARNING", "🟠")}
+
+---
+
+### 🟢 SUGGESTIONS
+> 💡 Improvements
+
+${formatSection(text, "SUGGESTIONS", "🟢")}
+
+---
+
+### 🔵 NOTE
+> 📝 Impact summary
+
+${formatSection(text, "NOTE", "🔵")}
 `;
 
 if (process.env.GITHUB_TOKEN && process.env.PR_NUMBER) {
