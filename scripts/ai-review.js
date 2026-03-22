@@ -1,6 +1,5 @@
 import "dotenv/config";
 import fs from "fs";
-import fetch from "node-fetch";
 import { execSync } from "child_process";
 
 let code = "";
@@ -50,6 +49,7 @@ NOTE:
 Rules:
 - Limit each point to 1–2 lines maximum
 - Be concise and precise
+- ALWAYS include file path in each point (e.g., controllers/file.js:)
 - Do not repeat code
 - Do not explain obvious things
 - Focus only on changed lines
@@ -79,18 +79,12 @@ const res = await fetch("https://api.openai.com/v1/responses", {
 
 const data = await res.json();
 
-
-// 🔍 Debug: print full response once
-// console.log("FULL RESPONSE:\n", JSON.stringify(data, null, 2));
-
-// ✅ Safe extraction
 const text =
   data?.output?.[0]?.content?.[0]?.text ||
   "No AI response received";
 
 console.log("\n===== AI REVIEW =====\n");
 console.log(text);
-
 
 const reviewComment = `
 ### 🤖 AI Code Review

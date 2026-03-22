@@ -24,20 +24,20 @@ export const calculate = async (payload) => {
     if (!calculator_type)
       return validationError("calculator_type", "calculator_type is required");
 
-    if (!leg_type) return validationError("leg_type", "leg_type is required");
+    // if (!leg_type) return validationError("leg_type", "leg_type is required");
 
-    if (!user_id) return validationError("user_id", "user_id is required");
+    // if (!user_id) return validationError("user_id", "user_id is required");
 
     // const factor = await EmissionFactor.findOne({ scope_id });
 
     // const isFlight = factor.activity_attributes?.activity === "flight";
 
-    // if (!isFlight && (distance === undefined || distance <= 0)) {
-    //   return validationError(
-    //     "distance",
-    //     "distance is required for non-flight modes",
-    //   );
-    // }
+    if (!isFlight && (distance === undefined || distance <= 0)) {
+      return validationError(
+        "distance",
+        "distance is required for non-flight modes",
+      );
+    }
 
     if (isFlight) {
       if (!passengers || passengers <= 0)
