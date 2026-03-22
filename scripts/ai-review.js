@@ -1,12 +1,15 @@
 import "dotenv/config";
 import fs from "fs";
+import { execSync } from "child_process";
 
 let code = "";
 
-try {
+if (fs.existsSync("diff.txt")) {
+  console.log("📄 Reading diff from file (GitHub Actions)");
   code = fs.readFileSync("diff.txt", "utf-8");
-} catch (err) {
-  console.log("❌ Failed to read diff.txt");
+} else {
+  console.log("💻 Running local git diff");
+  code = execSync("git diff", { encoding: "utf-8" });
 }
 
 if (!code || code.trim().length === 0) {
