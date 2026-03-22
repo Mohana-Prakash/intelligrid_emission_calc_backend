@@ -72,12 +72,13 @@ const res = await fetch("https://api.openai.com/v1/responses", {
     "Content-Type": "application/json"
   },
   body: JSON.stringify({
-    model: "gpt-4.1-mini",
+    model: "gpt-5.1",
     input: prompt
   })
 });
 
 const data = await res.json();
+console.log(data);
 
 const text =
   data?.output?.[0]?.content?.[0]?.text ||
