@@ -94,6 +94,6 @@ const EmissionFactorSchema = new mongoose.Schema(
 
 export default mongoose.model(
   "EmissionFactor",
-  EmissionFactorSchema,
+  // EmissionFactorSchema,
   "defra_emission_factor"
 );
