@@ -181,29 +181,19 @@ ${summary}
 
 ---
 
-### 🔴 CRITICAL
-> 🚨 Issues that will break production
+CRITICAL (Issues that will break production)
 
 ${formatSection(text, "CRITICAL", "🔴")}
 
----
-
-### 🟠 WARNING
-> ⚠️ Potential risks or concerns
+WARNING (Potential risks or concerns)
 
 ${formatSection(text, "WARNING", "🟠")}
 
----
-
-### 🟢 SUGGESTIONS
-> 💡 Improvements
+SUGGESTIONS (Improvements)
 
 ${formatSection(text, "SUGGESTIONS", "🟢")}
 
----
-
-### 🔵 NOTE
-> 📝 Impact summary
+NOTE (Impact summary)
 
 ${formatSection(text, "NOTE", "🔵")}
 `;
