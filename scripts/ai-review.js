@@ -243,7 +243,7 @@ for (const issue of criticalIssues) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          body: `🚨 AI: ${issue.message}`,
+          body: `${issue.message}`,
           commit_id: process.env.GITHUB_SHA,
           path: issue.file,
           line: issue.line,
