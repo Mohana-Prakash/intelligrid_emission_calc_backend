@@ -244,6 +244,7 @@ for (const issue of criticalIssues) {
         },
         body: JSON.stringify({
           body: `🚨 AI: ${issue.message}`,
+          commit_id: process.env.GITHUB_SHA,
           path: issue.file,
           line: issue.line,
           side: "RIGHT",
@@ -251,7 +252,9 @@ for (const issue of criticalIssues) {
       },
     );
 
-    console.log(`✅ Inline comment → ${issue.file}:${issue.line}`);
+    console.log(
+      `✅ Inline comment → ${issue.file}:${issue.line}: ${issue.message}:${process.env.GITHUB_SHA}`,
+    );
   } catch (err) {
     console.log("⚠️ Inline comment failed:", err.message);
   }
