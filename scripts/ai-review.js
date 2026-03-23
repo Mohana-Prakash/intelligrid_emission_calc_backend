@@ -17,7 +17,6 @@ if (!code || code.trim().length === 0) {
   process.exit(0);
 }
 
-
 const prompt = `
 You are a senior backend reviewer.
 
@@ -75,6 +74,9 @@ Rules:
 - Do not repeat code
 - Do not explain obvious things
 - Focus only on changed lines
+- ALWAYS include file path AND line number in each point
+- Format EXACTLY as: <file_path>:<line_number> → <issue>
+- Example: src/sample.service.js:45 → Missing error handling
 
 If no issues are found, respond exactly with:
 
@@ -103,24 +105,48 @@ ${code}
 const res = await fetch("https://api.openai.com/v1/responses", {
   method: "POST",
   headers: {
-    "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-    "Content-Type": "application/json"
+    Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    "Content-Type": "application/json",
   },
   body: JSON.stringify({
     model: "gpt-5.1",
-    input: prompt
-  })
+    input: prompt,
+  }),
 });
 
 const data = await res.json();
 
-const text =
-  data?.output?.[0]?.content?.[0]?.text ||
-  "No AI response received";
+const text = data?.output?.[0]?.content?.[0]?.text || "No AI response received";
 
 console.log("\n===== AI REVIEW =====\n");
 console.log(text);
 
+// ==========================
+// 🔥 PARSE FUNCTION
+// ==========================
+function extractIssues(text, section) {
+  const regex = new RegExp(`${section}:([\\s\\S]*?)(?=\\n[A-Z]+:|$)`);
+  const match = text.match(regex);
+
+  if (!match) return [];
+
+  return match[1]
+    .trim()
+    .split("\n")
+    .map((line) => line.replace(/^-\s*/, "").trim())
+    .filter((line) => line.includes(":") && line.includes("→"))
+    .map((line) => {
+      const [left, ...msgParts] = line.split("→");
+      const [file, lineNum] = left.trim().split(":");
+
+      return {
+        file: file.trim(),
+        line: parseInt(lineNum),
+        message: msgParts.join("→").trim(),
+      };
+    })
+    .filter((i) => i.file && i.line && !isNaN(i.line));
+}
 
 // 🧠 Helper: Extract section safely
 function formatSection(fullText, section, emoji) {
@@ -134,20 +160,18 @@ function formatSection(fullText, section, emoji) {
   return match[1]
     .trim()
     .split("\n")
-    .filter(line => line.trim().length > 0)
-    .map(line => `- ${line.replace(/^-\s*/, "")}`)
+    .filter((line) => line.trim().length > 0)
+    .map((line) => `- ${line.replace(/^-\s*/, "")}`)
     .join("\n");
 }
 
 // 🚀 Bonus: Summary detection
 const hasCritical =
-  /CRITICAL:\s*-\s+/m.test(text) &&
-  !/CRITICAL:\s*No issues found/i.test(text);
+  /CRITICAL:\s*-\s+/m.test(text) && !/CRITICAL:\s*No issues found/i.test(text);
 
 const summary = hasCritical
   ? "🚨 **Critical issues found – review required before merge**"
   : "✅ **No critical issues – safe to proceed**";
-
 
 // 🎨 Final formatted comment
 const reviewComment = `
@@ -184,19 +208,74 @@ ${formatSection(text, "SUGGESTIONS", "🟢")}
 ${formatSection(text, "NOTE", "🔵")}
 `;
 
-
 // 📬 Post to GitHub PR
 if (process.env.GITHUB_TOKEN && process.env.PR_NUMBER) {
-  await fetch(`https://api.github.com/repos/${process.env.REPO}/issues/${process.env.PR_NUMBER}/comments`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.GITHUB_TOKEN}`,
-      "Content-Type": "application/json"
+  await fetch(
+    `https://api.github.com/repos/${process.env.REPO}/issues/${process.env.PR_NUMBER}/comments`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        body: reviewComment,
+      }),
     },
-    body: JSON.stringify({
-      body: reviewComment
-    })
-  });
+  );
 
   console.log("✅ Comment posted to PR");
+}
+
+function extractIssues(text, section) {
+  const regex = new RegExp(`${section}:([\\s\\S]*?)(?=\\n[A-Z]+:|$)`);
+  const match = text.match(regex);
+
+  if (!match) return [];
+
+  return match[1]
+    .trim()
+    .split("\n")
+    .map((line) => line.replace(/^-\s*/, "").trim())
+    .filter((line) => line.includes(":") && line.includes("→"))
+    .map((line) => {
+      const [fileLine, ...rest] = line.split(" ");
+      const [file, lineNum] = fileLine.split(":");
+
+      return {
+        file,
+        line: parseInt(lineNum),
+        message: rest.join(" "),
+      };
+    });
+}
+
+// ==========================
+// 🚀 INLINE COMMENTS (CRITICAL)
+// ==========================
+const criticalIssues = extractIssues(text, "CRITICAL");
+
+for (const issue of criticalIssues) {
+  try {
+    await fetch(
+      `https://api.github.com/repos/${process.env.REPO}/pulls/${process.env.PR_NUMBER}/comments`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          body: `🚨 AI: ${issue.message}`,
+          path: issue.file,
+          line: issue.line,
+          side: "RIGHT",
+        }),
+      },
+    );
+
+    console.log(`✅ Inline comment → ${issue.file}:${issue.line}`);
+  } catch (err) {
+    console.log("⚠️ Inline comment failed:", err.message);
+  }
 }
