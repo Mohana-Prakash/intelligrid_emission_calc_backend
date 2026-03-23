@@ -227,29 +227,6 @@ if (process.env.GITHUB_TOKEN && process.env.PR_NUMBER) {
   console.log("✅ Comment posted to PR");
 }
 
-function extractIssues(text, section) {
-  const regex = new RegExp(`${section}:([\\s\\S]*?)(?=\\n[A-Z]+:|$)`);
-  const match = text.match(regex);
-
-  if (!match) return [];
-
-  return match[1]
-    .trim()
-    .split("\n")
-    .map((line) => line.replace(/^-\s*/, "").trim())
-    .filter((line) => line.includes(":") && line.includes("→"))
-    .map((line) => {
-      const [fileLine, ...rest] = line.split(" ");
-      const [file, lineNum] = fileLine.split(":");
-
-      return {
-        file,
-        line: parseInt(lineNum),
-        message: rest.join(" "),
-      };
-    });
-}
-
 // ==========================
 // 🚀 INLINE COMMENTS (CRITICAL)
 // ==========================
