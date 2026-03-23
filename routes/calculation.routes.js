@@ -5,7 +5,7 @@ import {
 } from "../controllers/calculation.controller.js";
 
 const router = express.Router();
-// router.post("/emission", calculateEmission);
-// router.get("/history", fetchCalculationHistory);
+router.post("/emission", calculateEmission);
+router.get("/history", fetchCalculationHistory);
 
 export default router;
