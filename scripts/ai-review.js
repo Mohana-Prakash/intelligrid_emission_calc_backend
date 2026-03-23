@@ -4,6 +4,9 @@ import { execSync } from "child_process";
 
 let code = "";
 
+// ==========================
+// 📄 READ DIFF
+// ==========================
 if (fs.existsSync("diff.txt")) {
   console.log("📄 Reading diff from file (GitHub Actions)");
   code = fs.readFileSync("diff.txt", "utf-8");
@@ -17,7 +20,21 @@ if (!code || code.trim().length === 0) {
   process.exit(0);
 }
 
+// 🔥 Limit diff size
+if (code.length > 12000) {
+  console.log("⚠️ Diff too large, truncating...");
+  code = code.slice(0, 12000);
+}
 
+// 🔐 API key guard
+if (!process.env.OPENAI_API_KEY) {
+  console.log("⚠️ OPENAI_API_KEY missing. Skipping AI review.");
+  process.exit(0);
+}
+
+// ==========================
+// 🧠 PROMPT
+// ==========================
 const prompt = `
 You are a senior backend reviewer.
 
@@ -36,167 +53,238 @@ Your responsibilities:
 Review the given git diff and respond STRICTLY in this format:
 
 CRITICAL:
-- Issues that will definitely break production, cause incorrect emission values, crashes, or security risks
+- Issues that will definitely break production
 
 WARNING:
-- Possible risks, missing validations, unclear logic, or maintainability concerns
+- Possible risks or concerns
 
 SUGGESTIONS:
-- Improvements that enhance clarity, robustness, or performance
+- Improvements
 
 NOTE:
-- One line stating whether emission calculation logic is impacted or not
+- One line summary
 
-STRICT VALIDATION RULES (VERY IMPORTANT):
+STRICT RULES:
+- ONLY analyze changed lines
+- NO assumptions
+- If unsure → WARNING
+- Max 3 CRITICAL issues
+- Format EXACTLY:
+  <file_path>:<line_number> → <issue>
+- Example:
+  services/file.js:45 → Missing validation
+- Use actual changed line numbers (not @@ header)
 
-CRITICAL must ONLY include:
-- Definite runtime errors (e.g., undefined variables, crashes)
-- Proven incorrect logic affecting output
-- Guaranteed production breakage directly caused by this change
+IGNORE:
+- scripts/*
+- .github/*
+- config/test/build files
 
-CRITICAL must NOT include:
-- Assumptions or speculation
-- “May cause issues” or “might break”
-- Environment-dependent risks
-- Missing context outside the diff
-
-ADDITIONAL CONSTRAINTS:
-- Do NOT raise hypothetical risks without direct evidence in the diff
-- Do NOT assume prior implementation unless explicitly shown
-- Only analyze the provided diff — ignore unseen codebase
-- Every CRITICAL issue must be provably caused by the current change
-- If unsure, downgrade to WARNING
-- Limit CRITICAL issues to a maximum of 3 (only most severe)
-
-Rules:
-- Limit each point to 1–2 lines maximum
-- Be concise and precise
-- ALWAYS include file path in each point (e.g., controllers/file.js:)
-- Do not repeat code
-- Do not explain obvious things
-- Focus only on changed lines
-
-If no issues are found, respond exactly with:
-
-CRITICAL:
-No issues found
-
-WARNING:
-No issues found
-
-SUGGESTIONS:
-No issues found
-
-NOTE:
-No impact to emission calculation logic
-
-Domain-specific checks:
-- Validate emission calculations are mathematically correct
-- Avoid hardcoded emission factors unless justified
-- Ensure null/undefined inputs are handled safely
-- Check for potential NaN or incorrect numeric outputs
-
-Code (git diff):
+Code:
 ${code}
 `;
 
+// ==========================
+// 🤖 CALL OPENAI
+// ==========================
 const res = await fetch("https://api.openai.com/v1/responses", {
   method: "POST",
   headers: {
-    "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-    "Content-Type": "application/json"
+    Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    "Content-Type": "application/json",
   },
   body: JSON.stringify({
-    model: "gpt-5.1",
-    input: prompt
-  })
+    model: "gpt-4.1-mini",
+    input: prompt,
+  }),
 });
+
+// ❌ API error handling
+if (!res.ok) {
+  const err = await res.text();
+  console.error("❌ OpenAI API Error:", err);
+  process.exit(1);
+}
 
 const data = await res.json();
 
-const text =
-  data?.output?.[0]?.content?.[0]?.text ||
-  "No AI response received";
+const text = data?.output?.[0]?.content?.[0]?.text || "No AI response received";
 
 console.log("\n===== AI REVIEW =====\n");
 console.log(text);
 
+// ==========================
+// 🔍 PARSE ISSUES
+// ==========================
+function extractIssues(text, section) {
+  const regex = new RegExp(`^${section}:([\\s\\S]*?)(?=^\\w+:|$)`, "m");
+  const match = text.match(regex);
 
-// 🧠 Helper: Extract section safely
-function formatSection(fullText, section, emoji) {
-  const regex = new RegExp(`${section}:([\\s\\S]*?)(?=\\n[A-Z]+:|$)`);
+  if (!match) return [];
+
+  return match[1]
+    .trim()
+    .split("\n")
+    .map((l) => l.replace(/^-\s*/, "").trim())
+    .filter((l) => l.includes(":") && l.includes("→"))
+    .map((line) => {
+      const [left, ...msg] = line.split("→");
+      const [file, lineNum] = left.trim().split(":");
+
+      return {
+        file: file.trim(),
+        line: parseInt(lineNum),
+        message: msg.join("→").trim(),
+      };
+    })
+    .filter((i) => i.file && i.line && !isNaN(i.line));
+}
+
+// ==========================
+// 🚫 IGNORE FILE FILTER
+// ==========================
+const IGNORED_PATHS = ["scripts/", ".github/"];
+
+function isIgnored(file) {
+  return IGNORED_PATHS.some((p) => file.startsWith(p));
+}
+
+// ==========================
+// 📊 SUMMARY DETECTION
+// ==========================
+const hasCritical = /CRITICAL:\s*\n(?!\s*No issues found)/i.test(text);
+
+const summary = hasCritical
+  ? "🚨 **Critical issues found – review required**"
+  : "✅ **No critical issues – safe to proceed**";
+
+// ==========================
+// 🧾 FORMAT COMMENT
+// ==========================
+function formatSection(fullText, section) {
+  const regex = new RegExp(`^${section}:([\\s\\S]*?)(?=^\\w+:|$)`, "m");
   const match = fullText.match(regex);
 
   if (!match || !match[1].trim()) {
-    return `${emoji} ✅ No issues found`;
+    return "No issues found";
   }
 
   return match[1]
     .trim()
     .split("\n")
-    .filter(line => line.trim().length > 0)
-    .map(line => `- ${line.replace(/^-\s*/, "")}`)
+    .map((l) => `- ${l.replace(/^-\s*/, "")}`)
     .join("\n");
 }
 
-// 🚀 Bonus: Summary detection
-const hasCritical =
-  /CRITICAL:\s*-\s+/m.test(text) &&
-  !/CRITICAL:\s*No issues found/i.test(text);
-
-const summary = hasCritical
-  ? "🚨 **Critical issues found – review required before merge**"
-  : "✅ **No critical issues – safe to proceed**";
-
-
-// 🎨 Final formatted comment
 const reviewComment = `
 ## 🤖 AI Code Review
 
 ${summary}
 
----
-
 ### 🔴 CRITICAL
-> 🚨 Issues that will break production
-
-${formatSection(text, "CRITICAL", "🔴")}
-
----
+${formatSection(text, "CRITICAL")}
 
 ### 🟠 WARNING
-> ⚠️ Potential risks or concerns
-
-${formatSection(text, "WARNING", "🟠")}
-
----
+${formatSection(text, "WARNING")}
 
 ### 🟢 SUGGESTIONS
-> 💡 Improvements
-
-${formatSection(text, "SUGGESTIONS", "🟢")}
-
----
+${formatSection(text, "SUGGESTIONS")}
 
 ### 🔵 NOTE
-> 📝 Impact summary
-
-${formatSection(text, "NOTE", "🔵")}
+${formatSection(text, "NOTE")}
 `;
 
-
-// 📬 Post to GitHub PR
+// ==========================
+// 📬 POST SUMMARY COMMENT
+// ==========================
 if (process.env.GITHUB_TOKEN && process.env.PR_NUMBER) {
-  await fetch(`https://api.github.com/repos/${process.env.REPO}/issues/${process.env.PR_NUMBER}/comments`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.GITHUB_TOKEN}`,
-      "Content-Type": "application/json"
+  await fetch(
+    `https://api.github.com/repos/${process.env.REPO}/issues/${process.env.PR_NUMBER}/comments`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ body: reviewComment }),
     },
-    body: JSON.stringify({
-      body: reviewComment
-    })
-  });
+  );
 
-  console.log("✅ Comment posted to PR");
+  console.log("✅ Summary comment posted");
+}
+
+// ==========================
+// 📌 INLINE COMMENTS (CRITICAL)
+// ==========================
+const criticalIssues = extractIssues(text, "CRITICAL");
+
+for (const issue of criticalIssues) {
+  if (!issue.line || issue.line <= 0) continue;
+  if (isIgnored(issue.file)) continue;
+
+  const correctedLine = adjustLineNumber(issue.file, issue.line, code);
+
+  try {
+    const ghRes = await fetch(
+      `https://api.github.com/repos/${process.env.REPO}/pulls/${process.env.PR_NUMBER}/comments`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          body: `🚨 AI: ${issue.message}`,
+          commit_id: process.env.GITHUB_SHA,
+          path: issue.file,
+          line: correctedLine,
+          side: "RIGHT",
+        }),
+      },
+    );
+
+    if (!ghRes.ok) {
+      const err = await ghRes.text();
+      console.log("❌ Inline comment error:", err);
+    } else {
+      console.log(`✅ Inline → ${issue.file}:${correctedLine}`);
+    }
+  } catch (err) {
+    console.log("⚠️ Inline failed:", err.message);
+  }
+}
+
+// ==========================
+// 🧠 LINE CORRECTION
+// ==========================
+function adjustLineNumber(file, approxLine, diffContent) {
+  const lines = diffContent.split("\n");
+
+  let currentFile = null;
+  let currentLine = 0;
+
+  for (const line of lines) {
+    if (line.startsWith("+++ b/")) {
+      currentFile = line.replace("+++ b/", "").trim();
+      currentLine = 0;
+      continue;
+    }
+
+    const match = line.match(/@@ -\d+,\d+ \+(\d+),/);
+    if (match) {
+      currentLine = parseInt(match[1]);
+      continue;
+    }
+
+    if (currentFile === file) {
+      if (line.startsWith("+") || line.startsWith("-")) {
+        if (Math.abs(currentLine - approxLine) <= 5) {
+          return currentLine;
+        }
+      }
+      currentLine++;
+    }
+  }
+
+  return approxLine;
 }
