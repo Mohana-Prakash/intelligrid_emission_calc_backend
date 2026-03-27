@@ -17,7 +17,6 @@ if (!code || code.trim().length === 0) {
   process.exit(0);
 }
 
-
 const prompt = `
 You are a senior backend reviewer.
 
@@ -75,6 +74,28 @@ Rules:
 - Do not repeat code
 - Do not explain obvious things
 - Focus only on changed lines
+- ALWAYS include file path AND line number in each point
+- Format EXACTLY as: <file_path>:<line_number> → <issue>
+- Example: src/sample.service.js:45 → Missing error handling
+- Line numbers must correspond to the actual changed line within the diff, not the diff chunk header (e.g., avoid using @@ -77).
+- Prefer the exact line where the change occurs (e.g., added/removed/commented line).
+
+IGNORE FILES (VERY IMPORTANT):
+
+- Ignore any files related to tooling, CI/CD, or AI review itself
+- Specifically ignore:
+  - scripts/ai-review.js
+  - .github/workflows/*
+  - Any test, config, or build-related files
+
+- Only review PRODUCT / BUSINESS LOGIC files such as:
+  - controllers/*
+  - services/*
+  - models/*
+  - routes/*
+  - middlewares/*
+
+- If a change belongs to ignored files, DO NOT include it in CRITICAL, WARNING, or SUGGESTIONS
 
 If no issues are found, respond exactly with:
 
@@ -103,24 +124,50 @@ ${code}
 const res = await fetch("https://api.openai.com/v1/responses", {
   method: "POST",
   headers: {
-    "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-    "Content-Type": "application/json"
+    Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    "Content-Type": "application/json",
   },
   body: JSON.stringify({
     model: "gpt-5.1",
-    input: prompt
-  })
+    input: prompt,
+  }),
 });
 
 const data = await res.json();
 
-const text =
-  data?.output?.[0]?.content?.[0]?.text ||
-  "No AI response received";
+const text = data?.output?.[0]?.content?.[0]?.text || "No AI response received";
 
 console.log("\n===== AI REVIEW =====\n");
+console.log(data);
+
 console.log(text);
 
+// ==========================
+// 🔥 PARSE FUNCTION
+// ==========================
+function extractIssues(text, section) {
+  const regex = new RegExp(`${section}:([\\s\\S]*?)(?=\\n[A-Z]+:|$)`);
+  const match = text.match(regex);
+
+  if (!match) return [];
+
+  return match[1]
+    .trim()
+    .split("\n")
+    .map((line) => line.replace(/^-\s*/, "").trim())
+    .filter((line) => line.includes(":") && line.includes("→"))
+    .map((line) => {
+      const [left, ...msgParts] = line.split("→");
+      const [file, lineNum] = left.trim().split(":");
+
+      return {
+        file: file.trim(),
+        line: parseInt(lineNum),
+        message: msgParts.join("→").trim(),
+      };
+    })
+    .filter((i) => i.file && i.line && !isNaN(i.line));
+}
 
 // 🧠 Helper: Extract section safely
 function formatSection(fullText, section, emoji) {
@@ -134,69 +181,114 @@ function formatSection(fullText, section, emoji) {
   return match[1]
     .trim()
     .split("\n")
-    .filter(line => line.trim().length > 0)
-    .map(line => `- ${line.replace(/^-\s*/, "")}`)
+    .filter((line) => line.trim().length > 0)
+    .map((line) => `- ${line.replace(/^-\s*/, "")}`)
     .join("\n");
 }
-
-// 🚀 Bonus: Summary detection
-const hasCritical =
-  /CRITICAL:\s*-\s+/m.test(text) &&
-  !/CRITICAL:\s*No issues found/i.test(text);
-
-const summary = hasCritical
-  ? "🚨 **Critical issues found – review required before merge**"
-  : "✅ **No critical issues – safe to proceed**";
-
 
 // 🎨 Final formatted comment
 const reviewComment = `
 ## 🤖 AI Code Review
 
-${summary}
-
----
-
-### 🔴 CRITICAL
-> 🚨 Issues that will break production
+CRITICAL (Issues that will break production)
 
 ${formatSection(text, "CRITICAL", "🔴")}
 
----
-
-### 🟠 WARNING
-> ⚠️ Potential risks or concerns
+WARNING (Potential risks or concerns)
 
 ${formatSection(text, "WARNING", "🟠")}
 
----
-
-### 🟢 SUGGESTIONS
-> 💡 Improvements
+SUGGESTIONS (Improvements)
 
 ${formatSection(text, "SUGGESTIONS", "🟢")}
 
----
-
-### 🔵 NOTE
-> 📝 Impact summary
+NOTE (Impact summary)
 
 ${formatSection(text, "NOTE", "🔵")}
 `;
 
-
 // 📬 Post to GitHub PR
 if (process.env.GITHUB_TOKEN && process.env.PR_NUMBER) {
-  await fetch(`https://api.github.com/repos/${process.env.REPO}/issues/${process.env.PR_NUMBER}/comments`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.GITHUB_TOKEN}`,
-      "Content-Type": "application/json"
+  await fetch(
+    `https://api.github.com/repos/${process.env.REPO}/issues/${process.env.PR_NUMBER}/comments`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        body: reviewComment,
+      }),
     },
-    body: JSON.stringify({
-      body: reviewComment
-    })
-  });
+  );
 
   console.log("✅ Comment posted to PR");
+}
+
+// ==========================
+// 🚀 INLINE COMMENTS (CRITICAL)
+// ==========================
+const criticalIssues = extractIssues(text, "CRITICAL");
+
+for (const issue of criticalIssues) {
+  const correctedLine = adjustLineNumber(issue.file, issue.line, code);
+  try {
+    await fetch(
+      `https://api.github.com/repos/${process.env.REPO}/pulls/${process.env.PR_NUMBER}/comments`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          body: `${issue.message}`,
+          commit_id: process.env.GITHUB_SHA,
+          path: issue.file,
+          line: correctedLine,
+          side: "RIGHT",
+        }),
+      },
+    );
+
+    console.log(`✅ Inline → ${issue.file}:${correctedLine}`);
+  } catch (err) {
+    console.log("⚠️ Inline comment failed:", err.message);
+  }
+}
+
+function adjustLineNumber(file, approxLine, diffContent) {
+  const lines = diffContent.split("\n");
+
+  let currentFile = null;
+  let currentLine = 0;
+
+  for (const line of lines) {
+    // Detect file
+    if (line.startsWith("+++ b/")) {
+      currentFile = line.replace("+++ b/", "").trim();
+      currentLine = 0;
+      continue;
+    }
+
+    // Detect hunk start
+    const match = line.match(/@@ -\d+,\d+ \+(\d+),/);
+    if (match) {
+      currentLine = parseInt(match[1]);
+      continue;
+    }
+
+    if (currentFile === file) {
+      if (line.startsWith("+") || line.startsWith("-")) {
+        // Try to find better match near approx line
+        if (Math.abs(currentLine - approxLine) <= 5) {
+          return currentLine;
+        }
+      }
+      currentLine++;
+    }
+  }
+
+  return approxLine; // fallback
 }
