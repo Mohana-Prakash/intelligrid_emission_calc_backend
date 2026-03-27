@@ -4,6 +4,9 @@ import { execSync } from "child_process";
 
 let code = "";
 
+// ==========================
+// 📄 READ DIFF
+// ==========================
 if (fs.existsSync("diff.txt")) {
   console.log("📄 Reading diff from file (GitHub Actions)");
   code = fs.readFileSync("diff.txt", "utf-8");
@@ -35,23 +38,32 @@ Your responsibilities:
 Review the given git diff and respond STRICTLY in this format:
 
 CRITICAL:
-- Issues that will definitely break production, cause incorrect emission values, crashes, or security risks
+- Issues that will definitely break production
 
 WARNING:
-- Possible risks, missing validations, unclear logic, or maintainability concerns
+- Possible risks or concerns
 
 SUGGESTIONS:
-- Improvements that enhance clarity, robustness, or performance
+- Improvements
 
 NOTE:
-- One line stating whether emission calculation logic is impacted or not
+- One line summary
 
-STRICT VALIDATION RULES (VERY IMPORTANT):
+STRICT RULES:
+- ONLY analyze changed lines
+- NO assumptions
+- If unsure → WARNING
+- Max 3 CRITICAL issues
+- Format EXACTLY:
+  <file_path>:<line_number> → <issue>
+- Example:
+  services/file.js:45 → Missing validation
+- Use actual changed line numbers (not @@ header)
 
-CRITICAL must ONLY include:
-- Definite runtime errors (e.g., undefined variables, crashes)
-- Proven incorrect logic affecting output
-- Guaranteed production breakage directly caused by this change
+IGNORE:
+- scripts/*
+- .github/*
+- config/test/build files
 
 CRITICAL must NOT include:
 - Assumptions or speculation
@@ -121,6 +133,9 @@ Code (git diff):
 ${code}
 `;
 
+// ==========================
+// 🤖 CALL OPENAI
+// ==========================
 const res = await fetch("https://api.openai.com/v1/responses", {
   method: "POST",
   headers: {
@@ -132,6 +147,13 @@ const res = await fetch("https://api.openai.com/v1/responses", {
     input: prompt,
   }),
 });
+
+// ❌ API error handling
+if (!res.ok) {
+  const err = await res.text();
+  console.error("❌ OpenAI API Error:", err);
+  process.exit(1);
+}
 
 const data = await res.json();
 
@@ -169,13 +191,33 @@ function extractIssues(text, section) {
     .filter((i) => i.file && i.line && !isNaN(i.line));
 }
 
-// 🧠 Helper: Extract section safely
-function formatSection(fullText, section, emoji) {
-  const regex = new RegExp(`${section}:([\\s\\S]*?)(?=\\n[A-Z]+:|$)`);
+// ==========================
+// 🚫 IGNORE FILE FILTER
+// ==========================
+const IGNORED_PATHS = ["scripts/", ".github/"];
+
+function isIgnored(file) {
+  return IGNORED_PATHS.some((p) => file.startsWith(p));
+}
+
+// ==========================
+// 📊 SUMMARY DETECTION
+// ==========================
+const hasCritical = /CRITICAL:\s*\n(?!\s*No issues found)/i.test(text);
+
+const summary = hasCritical
+  ? "🚨 **Critical issues found – review required**"
+  : "✅ **No critical issues – safe to proceed**";
+
+// ==========================
+// 🧾 FORMAT COMMENT
+// ==========================
+function formatSection(fullText, section) {
+  const regex = new RegExp(`^${section}:([\\s\\S]*?)(?=^\\w+:|$)`, "m");
   const match = fullText.match(regex);
 
   if (!match || !match[1].trim()) {
-    return `${emoji} ✅ No issues found`;
+    return "No issues found";
   }
 
   return match[1]

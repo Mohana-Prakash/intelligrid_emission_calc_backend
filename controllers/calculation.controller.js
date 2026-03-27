@@ -65,7 +65,7 @@ import * as historyService from "../services/fetchCalculation.service.js";
  */
 export const calculateEmission = async (req, res) => {
   const result = await calculationService.calculate(req.body);
-  res.json(result);
+  // res.json(result);
 };
 
 /**
