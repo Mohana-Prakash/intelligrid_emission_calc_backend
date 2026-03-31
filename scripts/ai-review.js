@@ -4,9 +4,7 @@ import { execSync } from "child_process";
 
 let code = "";
 
-// ==========================
-// 📄 READ DIFF
-// ==========================
+// READ DIFF
 if (fs.existsSync("diff.txt")) {
   console.log("📄 Reading diff from file (GitHub Actions)");
   code = fs.readFileSync("diff.txt", "utf-8");
@@ -133,9 +131,7 @@ Code (git diff):
 ${code}
 `;
 
-// ==========================
-// 🤖 CALL OPENAI
-// ==========================
+// CALL OPENAI
 const res = await fetch("https://api.openai.com/v1/responses", {
   method: "POST",
   headers: {
@@ -159,14 +155,9 @@ const data = await res.json();
 
 const text = data?.output?.[0]?.content?.[0]?.text || "No AI response received";
 
-console.log("\n===== AI REVIEW =====\n");
-console.log(data);
-
 console.log(text);
 
-// ==========================
-// 🔥 PARSE FUNCTION
-// ==========================
+// PARSE FUNCTION
 function extractIssues(text, section) {
   const regex = new RegExp(`${section}:([\\s\\S]*?)(?=\\n[A-Z]+:|$)`);
   const match = text.match(regex);
@@ -191,27 +182,7 @@ function extractIssues(text, section) {
     .filter((i) => i.file && i.line && !isNaN(i.line));
 }
 
-// ==========================
-// 🚫 IGNORE FILE FILTER
-// ==========================
-const IGNORED_PATHS = ["scripts/", ".github/"];
-
-function isIgnored(file) {
-  return IGNORED_PATHS.some((p) => file.startsWith(p));
-}
-
-// ==========================
-// 📊 SUMMARY DETECTION
-// ==========================
-const hasCritical = /CRITICAL:\s*\n(?!\s*No issues found)/i.test(text);
-
-const summary = hasCritical
-  ? "🚨 **Critical issues found – review required**"
-  : "✅ **No critical issues – safe to proceed**";
-
-// ==========================
-// 🧾 FORMAT COMMENT
-// ==========================
+// FORMAT COMMENT
 function formatSection(fullText, section) {
   const regex = new RegExp(`^${section}:([\\s\\S]*?)(?=^\\w+:|$)`, "m");
   const match = fullText.match(regex);
@@ -228,7 +199,7 @@ function formatSection(fullText, section) {
     .join("\n");
 }
 
-// 🎨 Final formatted comment
+// Final formatted comment
 const reviewComment = `
 ## 🤖 AI Code Review
 
@@ -249,7 +220,7 @@ NOTE (Impact summary)
 ${formatSection(text, "NOTE", "🔵")}
 `;
 
-// 📬 Post to GitHub PR
+// Post to GitHub PR
 if (process.env.GITHUB_TOKEN && process.env.PR_NUMBER) {
   await fetch(
     `https://api.github.com/repos/${process.env.REPO}/issues/${process.env.PR_NUMBER}/comments`,
@@ -268,69 +239,67 @@ if (process.env.GITHUB_TOKEN && process.env.PR_NUMBER) {
   console.log("✅ Comment posted to PR");
 }
 
-// ==========================
-// 🚀 INLINE COMMENTS (CRITICAL)
-// ==========================
-const criticalIssues = extractIssues(text, "CRITICAL");
+// INLINE COMMENTS (CRITICAL)
+// const criticalIssues = extractIssues(text, "CRITICAL");
 
-for (const issue of criticalIssues) {
-  const correctedLine = adjustLineNumber(issue.file, issue.line, code);
-  try {
-    await fetch(
-      `https://api.github.com/repos/${process.env.REPO}/pulls/${process.env.PR_NUMBER}/comments`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          body: `${issue.message}`,
-          commit_id: process.env.GITHUB_SHA,
-          path: issue.file,
-          line: correctedLine,
-          side: "RIGHT",
-        }),
-      },
-    );
+// for (const issue of criticalIssues) {
+//   const correctedLine = adjustLineNumber(issue.file, issue.line, code);
+//   try {
+//     await fetch(
+//       `https://api.github.com/repos/${process.env.REPO}/pulls/${process.env.PR_NUMBER}/comments`,
+//       {
+//         method: "POST",
+//         headers: {
+//           Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+//           "Content-Type": "application/json",
+//         },
+//         body: JSON.stringify({
+//           body: `${issue.message}`,
+//           commit_id: process.env.GITHUB_SHA,
+//           path: issue.file,
+//           line: correctedLine,
+//           side: "RIGHT",
+//         }),
+//       },
+//     );
 
-    console.log(`✅ Inline → ${issue.file}:${correctedLine}`);
-  } catch (err) {
-    console.log("⚠️ Inline comment failed:", err.message);
-  }
-}
+//     console.log(`✅ Inline → ${issue.file}:${correctedLine}`);
+//   } catch (err) {
+//     console.log("⚠️ Inline comment failed:", err.message);
+//   }
+// }
 
-function adjustLineNumber(file, approxLine, diffContent) {
-  const lines = diffContent.split("\n");
+// function adjustLineNumber(file, approxLine, diffContent) {
+//   const lines = diffContent.split("\n");
 
-  let currentFile = null;
-  let currentLine = 0;
+//   let currentFile = null;
+//   let currentLine = 0;
 
-  for (const line of lines) {
-    // Detect file
-    if (line.startsWith("+++ b/")) {
-      currentFile = line.replace("+++ b/", "").trim();
-      currentLine = 0;
-      continue;
-    }
+//   for (const line of lines) {
+//     // Detect file
+//     if (line.startsWith("+++ b/")) {
+//       currentFile = line.replace("+++ b/", "").trim();
+//       currentLine = 0;
+//       continue;
+//     }
 
-    // Detect hunk start
-    const match = line.match(/@@ -\d+,\d+ \+(\d+),/);
-    if (match) {
-      currentLine = parseInt(match[1]);
-      continue;
-    }
+//     // Detect hunk start
+//     const match = line.match(/@@ -\d+,\d+ \+(\d+),/);
+//     if (match) {
+//       currentLine = parseInt(match[1]);
+//       continue;
+//     }
 
-    if (currentFile === file) {
-      if (line.startsWith("+") || line.startsWith("-")) {
-        // Try to find better match near approx line
-        if (Math.abs(currentLine - approxLine) <= 5) {
-          return currentLine;
-        }
-      }
-      currentLine++;
-    }
-  }
+//     if (currentFile === file) {
+//       if (line.startsWith("+") || line.startsWith("-")) {
+//         // Try to find better match near approx line
+//         if (Math.abs(currentLine - approxLine) <= 5) {
+//           return currentLine;
+//         }
+//       }
+//       currentLine++;
+//     }
+//   }
 
-  return approxLine; // fallback
-}
+//   return approxLine; // fallback
+// }
