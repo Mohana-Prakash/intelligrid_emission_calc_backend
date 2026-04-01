@@ -184,8 +184,14 @@ function extractIssues(text, section) {
 
 // FORMAT COMMENT
 function formatSection(fullText, section) {
-  const regex = new RegExp(`^${section}:([\\s\\S]*?)(?=^\\w+:|$)`, "m");
-  const match = fullText.match(regex);
+  const normalized = fullText.replace(/\r/g, "");
+
+  const regex = new RegExp(
+    `^\\s*${section}:\\s*([\\s\\S]*?)(?=^\\s*[A-Z]+:|$)`,
+    "mi",
+  );
+
+  const match = normalized.match(regex);
 
   if (!match || !match[1].trim()) {
     return "No issues found";
@@ -194,7 +200,8 @@ function formatSection(fullText, section) {
   return match[1]
     .trim()
     .split("\n")
-    .filter((line) => line.trim().length > 0)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
     .map((line) => `- ${line.replace(/^-\s*/, "")}`)
     .join("\n");
 }
@@ -222,7 +229,7 @@ ${formatSection(text, "NOTE", "🔵")}
 
 // Post to GitHub PR
 if (process.env.GITHUB_TOKEN && process.env.PR_NUMBER) {
-  await fetch(
+  const ghRes = await fetch(
     `https://api.github.com/repos/${process.env.REPO}/issues/${process.env.PR_NUMBER}/comments`,
     {
       method: "POST",
@@ -230,11 +237,16 @@ if (process.env.GITHUB_TOKEN && process.env.PR_NUMBER) {
         Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        body: reviewComment,
-      }),
+      body: JSON.stringify({ body: reviewComment }),
     },
   );
+
+  const ghData = await ghRes.text();
+
+  if (!ghRes.ok) {
+    console.error("❌ GitHub API Error:", ghData);
+    process.exit(1);
+  }
 
   console.log("✅ Comment posted to PR");
 }
