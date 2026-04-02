@@ -104,11 +104,12 @@ export const calculate = async (payload) => {
       console.error("Failed to store calculation history:", historyErr);
     }
 
-    return {
-      statusCode: 200,
-      success: true,
-      response: calculationResult,
-    };
+    // return {
+    //   statusCode: 200,
+    //   success: true,
+    //   response: calculationResult,
+    // };
+    // 
   } catch (err) {
     // console.error(err);
     return serverError();
