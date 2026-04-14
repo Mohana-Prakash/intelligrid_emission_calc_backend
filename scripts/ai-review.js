@@ -154,7 +154,7 @@ const data = await res.json();
 
 const text = data?.output?.[0]?.content?.[0]?.text || "No AI response received";
 
-console.log(text);
+console.log("TEXT:", text);
 
 // FORMAT COMMENT
 function getSection(text, section) {
@@ -232,93 +232,93 @@ if (process.env.GITHUB_TOKEN && process.env.PR_NUMBER) {
 }
 
 // PARSE FUNCTION
-// function extractIssues(text, section) {
-//   const regex = new RegExp(`${section}:([\\s\\S]*?)(?=\\n[A-Z]+:|$)`);
-//   const match = text.match(regex);
+function extractIssues(text, section) {
+  const regex = new RegExp(`${section}:([\\s\\S]*?)(?=\\n[A-Z]+:|$)`);
+  const match = text.match(regex);
 
-//   if (!match) return [];
+  if (!match) return [];
 
-//   return match[1]
-//     .trim()
-//     .split("\n")
-//     .map((line) => line.replace(/^-\s*/, "").trim())
-//     .filter((line) => line.includes(":") && line.includes("→"))
-//     .map((line) => {
-//       const [left, ...msgParts] = line.split("→");
-//       const [file, lineNum] = left.trim().split(":");
+  return match[1]
+    .trim()
+    .split("\n")
+    .map((line) => line.replace(/^-\s*/, "").trim())
+    .filter((line) => line.includes(":") && line.includes("→"))
+    .map((line) => {
+      const [left, ...msgParts] = line.split("→");
+      const [file, lineNum] = left.trim().split(":");
 
-//       return {
-//         file: file.trim(),
-//         line: parseInt(lineNum),
-//         message: msgParts.join("→").trim(),
-//       };
-//     })
-//     .filter((i) => i.file && i.line && !isNaN(i.line));
-// }
+      return {
+        file: file.trim(),
+        line: parseInt(lineNum),
+        message: msgParts.join("→").trim(),
+      };
+    })
+    .filter((i) => i.file && i.line && !isNaN(i.line));
+}
 
 // INLINE COMMENTS (CRITICAL)
-// const criticalIssues = extractIssues(text, "CRITICAL");
+const criticalIssues = extractIssues(text, "CRITICAL");
 
-// for (const issue of criticalIssues) {
-//   const correctedLine = adjustLineNumber(issue.file, issue.line, code);
-//   try {
-//     await fetch(
-//       `https://api.github.com/repos/${process.env.REPO}/pulls/${process.env.PR_NUMBER}/comments`,
-//       {
-//         method: "POST",
-//         headers: {
-//           Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-//           "Content-Type": "application/json",
-//         },
-//         body: JSON.stringify({
-//           body: `${issue.message}`,
-//           commit_id: process.env.GITHUB_SHA,
-//           path: issue.file,
-//           line: correctedLine,
-//           side: "RIGHT",
-//         }),
-//       },
-//     );
+for (const issue of criticalIssues) {
+  const correctedLine = adjustLineNumber(issue.file, issue.line, code);
+  try {
+    await fetch(
+      `https://api.github.com/repos/${process.env.REPO}/pulls/${process.env.PR_NUMBER}/comments`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          body: `${issue.message}`,
+          commit_id: process.env.GITHUB_SHA,
+          path: issue.file,
+          line: correctedLine,
+          side: "RIGHT",
+        }),
+      },
+    );
 
-//     console.log(`✅ Inline → ${issue.file}:${correctedLine}`);
-//   } catch (err) {
-//     console.log("⚠️ Inline comment failed:", err.message);
-//   }
-// }
+    console.log(`✅ Inline → ${issue.file}:${correctedLine}`);
+  } catch (err) {
+    console.log("⚠️ Inline comment failed:", err.message);
+  }
+}
 
-// function adjustLineNumber(file, approxLine, diffContent) {
-//   const lines = diffContent.split("\n");
+function adjustLineNumber(file, approxLine, diffContent) {
+  const lines = diffContent.split("\n");
 
-//   let currentFile = null;
-//   let currentLine = 0;
+  let currentFile = null;
+  let currentLine = 0;
 
-//   for (const line of lines) {
-//     // Detect file
-//     if (line.startsWith("+++ b/")) {
-//       currentFile = line.replace("+++ b/", "").trim();
-//       currentLine = 0;
-//       continue;
-//     }
+  for (const line of lines) {
+    // Detect file
+    if (line.startsWith("+++ b/")) {
+      currentFile = line.replace("+++ b/", "").trim();
+      currentLine = 0;
+      continue;
+    }
 
-//     // Detect hunk start
-//     const match = line.match(/@@ -\d+,\d+ \+(\d+),/);
-//     if (match) {
-//       currentLine = parseInt(match[1]);
-//       continue;
-//     }
+    // Detect hunk start
+    const match = line.match(/@@ -\d+,\d+ \+(\d+),/);
+    if (match) {
+      currentLine = parseInt(match[1]);
+      continue;
+    }
 
-//     if (currentFile === file) {
-//       if (line.startsWith("+") || line.startsWith("-")) {
-//         // Try to find better match near approx line
-//         if (Math.abs(currentLine - approxLine) <= 5) {
-//           return currentLine;
-//         }
-//       }
-//       currentLine++;
-//     }
-//   }
+    if (currentFile === file) {
+      if (line.startsWith("+") || line.startsWith("-")) {
+        // Try to find better match near approx line
+        if (Math.abs(currentLine - approxLine) <= 5) {
+          return currentLine;
+        }
+      }
+      currentLine++;
+    }
+  }
 
-//   return approxLine; // fallback
-// }
+  return approxLine; // fallback
+}
 
 // - Max 3 CRITICAL issues
