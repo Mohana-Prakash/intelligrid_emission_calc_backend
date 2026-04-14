@@ -110,7 +110,6 @@ export const calculate = async (payload) => {
       response: calculationResult,
     };
   } catch (err) {
-    console.error(err);
     return serverError();
   }
 };
