@@ -64,7 +64,7 @@ import * as historyService from "../services/fetchCalculation.service.js";
  *         description: Internal server error
  */
 export const calculateEmission = async (req, res) => {
-  const result = await calculationService.calculate(req.body);
+  // const result = await calculationService.calculate(req.body);
   res.json(result);
 };
 

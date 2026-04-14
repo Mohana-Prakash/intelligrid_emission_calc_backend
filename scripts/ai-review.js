@@ -74,7 +74,7 @@ ADDITIONAL CONSTRAINTS:
 - Only analyze the provided diff — ignore unseen codebase
 - Every CRITICAL issue must be provably caused by the current change
 - If unsure, downgrade to WARNING
-- Limit CRITICAL issues to a maximum of 3 (only most severe)
+
 
 Rules:
 - Limit each point to 1–2 lines maximum
@@ -322,3 +322,4 @@ function adjustLineNumber(file, approxLine, diffContent) {
 }
 
 // - Max 3 CRITICAL issues
+// - Limit CRITICAL issues to a maximum of 3 (only most severe)
