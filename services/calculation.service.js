@@ -109,8 +109,8 @@ export const calculate = async (payload) => {
       success: true,
       response: calculationResult,
     };
-  } catch (err) {
-    // console.error(err);
-    return serverError();
-  }
+  } 
+  // catch (err) {
+  //   return serverError();
+  // }
 };

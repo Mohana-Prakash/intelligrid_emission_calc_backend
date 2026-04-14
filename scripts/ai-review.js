@@ -51,7 +51,6 @@ STRICT RULES:
 - ONLY analyze changed lines
 - NO assumptions
 - If unsure → WARNING
-- Max 3 CRITICAL issues
 - Format EXACTLY:
   <file_path>:<line_number> → <issue>
 - Example:
@@ -157,74 +156,55 @@ const text = data?.output?.[0]?.content?.[0]?.text || "No AI response received";
 
 console.log(text);
 
-// PARSE FUNCTION
-function extractIssues(text, section) {
-  const regex = new RegExp(`${section}:([\\s\\S]*?)(?=\\n[A-Z]+:|$)`);
-  const match = text.match(regex);
-
-  if (!match) return [];
-
-  return match[1]
-    .trim()
-    .split("\n")
-    .map((line) => line.replace(/^-\s*/, "").trim())
-    .filter((line) => line.includes(":") && line.includes("→"))
-    .map((line) => {
-      const [left, ...msgParts] = line.split("→");
-      const [file, lineNum] = left.trim().split(":");
-
-      return {
-        file: file.trim(),
-        line: parseInt(lineNum),
-        message: msgParts.join("→").trim(),
-      };
-    })
-    .filter((i) => i.file && i.line && !isNaN(i.line));
-}
-
 // FORMAT COMMENT
-function formatSection(fullText, section) {
-  const normalized = fullText.replace(/\r/g, "");
+function getSection(text, section) {
+  const lines = text.split("\n");
 
-  const regex = new RegExp(
-    `^\\s*${section}:\\s*([\\s\\S]*?)(?=^\\s*[A-Z]+:|$)`,
-    "mi",
-  );
+  let capture = false;
+  const result = [];
 
-  const match = normalized.match(regex);
+  for (const line of lines) {
+    const trimmed = line.trim();
 
-  if (!match || !match[1].trim()) {
-    return "No issues found";
+    // Start section
+    if (trimmed.startsWith(section + ":")) {
+      capture = true;
+      continue;
+    }
+
+    // Stop at next section (more robust)
+    if (capture && /^[A-Z]+\s*:/.test(trimmed)) {
+      break;
+    }
+
+    // Collect lines
+    if (capture && trimmed) {
+      result.push(`- ${trimmed.replace(/^-\s*/, "")}`);
+    }
   }
 
-  return match[1]
-    .trim()
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line) => `- ${line.replace(/^-\s*/, "")}`)
-    .join("\n");
+  return result.length ? result.join("\n") : "No issues found";
 }
 
 // Final formatted comment
 const reviewComment = `
 ## 🤖 AI Code Review
 
-CRITICAL (Issues that will break production)
+### CRITICAL (Issues that will break production)
 
-${formatSection(text, "CRITICAL", "🔴")}
+${getSection(text, "CRITICAL")}
 
-WARNING (Potential risks or concerns)
+### WARNING (Potential risks or concerns)
 
-${formatSection(text, "WARNING", "🟠")}
+${getSection(text, "WARNING")}
 
-SUGGESTIONS (Improvements)
+### SUGGESTIONS (Improvements)
 
-${formatSection(text, "SUGGESTIONS", "🟢")}
+${getSection(text, "SUGGESTIONS")}
 
-NOTE (Impact summary)
+### NOTE (Impact summary)
 
-${formatSection(text, "NOTE", "🔵")}
+${getSection(text, "NOTE")}
 `;
 
 // Post to GitHub PR
@@ -250,6 +230,31 @@ if (process.env.GITHUB_TOKEN && process.env.PR_NUMBER) {
 
   console.log("✅ Comment posted to PR");
 }
+
+// PARSE FUNCTION
+// function extractIssues(text, section) {
+//   const regex = new RegExp(`${section}:([\\s\\S]*?)(?=\\n[A-Z]+:|$)`);
+//   const match = text.match(regex);
+
+//   if (!match) return [];
+
+//   return match[1]
+//     .trim()
+//     .split("\n")
+//     .map((line) => line.replace(/^-\s*/, "").trim())
+//     .filter((line) => line.includes(":") && line.includes("→"))
+//     .map((line) => {
+//       const [left, ...msgParts] = line.split("→");
+//       const [file, lineNum] = left.trim().split(":");
+
+//       return {
+//         file: file.trim(),
+//         line: parseInt(lineNum),
+//         message: msgParts.join("→").trim(),
+//       };
+//     })
+//     .filter((i) => i.file && i.line && !isNaN(i.line));
+// }
 
 // INLINE COMMENTS (CRITICAL)
 // const criticalIssues = extractIssues(text, "CRITICAL");
@@ -315,3 +320,5 @@ if (process.env.GITHUB_TOKEN && process.env.PR_NUMBER) {
 
 //   return approxLine; // fallback
 // }
+
+// - Max 3 CRITICAL issues

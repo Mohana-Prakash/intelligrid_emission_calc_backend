@@ -10,7 +10,7 @@ export const validationError = (field, message) => ({
   },
 });
 
-export const notFoundError = (field, message) => ({
+export const notFoundError = (field) => ({
   statusCode: 404,
   body: {
     success: false,
