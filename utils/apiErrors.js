@@ -20,7 +20,7 @@ export const notFoundError = (field, message) => ({
       field,
     },
   },
-// });
+});
 
 export const serverError = (message = "Internal server error") => ({
   statusCode: 500,
