@@ -5,7 +5,7 @@ import { connectDB } from "./config/db.js";
 dotenv.config();
 await connectDB();
 
-console.log("check");
+console.log("Changes in feature 2 branch");
 
 app.listen(process.env.PORT || 4000, () =>
   console.log(`Server running on port ${process.env.PORT || 4000}`),
