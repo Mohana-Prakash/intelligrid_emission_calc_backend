@@ -2,5 +2,6 @@ import mongoose from "mongoose";
 
 export const connectDB = async () => {
   await mongoose.connect(process.env.MONGO_URI);
-  console.log("MongoDB connected");
+  const mongoMessage = `MongoDB connected: ${mongoose.connection.host}`;
+  console.log(mongoMessage);
 };
