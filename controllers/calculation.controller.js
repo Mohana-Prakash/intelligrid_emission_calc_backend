@@ -97,6 +97,6 @@ export const calculateEmission = async (req, res) => {
  *         description: Internal server error
  */
 export const fetchCalculationHistory = async (req, res) => {
-  const result = await historyService.fetchHistory(req.query);
-  res.json(result);
+  // const result = await historyService.fetchHistory(req.query);
+  // res.json(result);
 };
